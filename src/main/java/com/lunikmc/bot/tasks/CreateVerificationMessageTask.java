@@ -12,6 +12,8 @@ import net.dv8tion.jda.api.interactions.components.buttons.Button;
 import net.dv8tion.jda.api.utils.messages.MessageCreateBuilder;
 import net.dv8tion.jda.api.utils.messages.MessageCreateData;
 
+import java.util.Objects;
+
 @RequiredArgsConstructor
 public class CreateVerificationMessageTask implements Runnable {
     private final LunikBot lunikBot;
@@ -27,7 +29,7 @@ public class CreateVerificationMessageTask implements Runnable {
             throw new TextChannelNotFound("Verification text channel not found");
         }
 
-        if(configManager.getVerificationMessageId() != null) {
+        if(configManager.getVerificationMessageId() != null && !Objects.equals(configManager.getVerificationMessageId(), "")) {
             try {
                 textChannel.retrieveMessageById(configManager.getVerificationMessageId()).complete();
                 return;
@@ -39,7 +41,7 @@ public class CreateVerificationMessageTask implements Runnable {
                 .setColor(lunikBot.DEFAULT_EMBED_COLOR)
                 .setDescription("Para se verificar, clique no botão abaixo");
 
-        Button verificationButton = Button.primary("verification", "Verificar");
+        Button verificationButton = Button.success("verification", "Verificar");
 
         MessageCreateData message = new MessageCreateBuilder()
                 .setEmbeds(embedBuilder.build())

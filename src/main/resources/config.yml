@@ -1,5 +1,7 @@
 bot:
   token: "YOUR_BOT_TOKEN"
   verification-channel-id: "YOUR_VERIFICATION_CHANNEL_ID"
-  verification-message-id: # let it empty, this is used to store the message id of the verification message
+  verification-message-id: # leave blank, this is used to store the message id of the verification message
   member-role-id: "YOUR_MEMBER_ROLE_ID"
+  status-channel-id: "YOUR_STATUS_CHANNEL_ID"
+  status-message-id: # leave blank as well
