@@ -11,9 +11,6 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
-import net.md_5.bungee.api.Callback;
-import net.md_5.bungee.api.ServerPing;
-import net.md_5.bungee.api.config.ServerInfo;
 import net.md_5.bungee.api.scheduler.ScheduledTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,32 +123,38 @@ public class VerifyStatusTask implements Runnable {
 
     private void updateDiscordMessage(List<ServerStatus> serversStatus) {
         EmbedBuilder embedBuilder = new EmbedBuilder(lunikBot.getDefaultEmbed().build());
+        HashMap<String, String> fields = collectServerStatusFields(serversStatus);
+
+        addFieldsToEmbed(embedBuilder, fields);
+
+        if(shouldUpdateMessage(embedBuilder)) {
+            editDiscordMessage(embedBuilder);
+        }
+    }
+
+    private HashMap<String, String> collectServerStatusFields(List<ServerStatus> serversStatus) {
         HashMap<String, String> fields = new HashMap<>();
 
         for(ServerStatus serverStatus : serversStatus) {
-            String serverName = serverStatus.getServerInfo().getName();
-            serverName = Character.toUpperCase(serverName.charAt(0)) + serverName.substring(1);
-
-            String statusMessage;
-            switch (serverStatus.getStatus()) {
-                case ONLINE:
-                    statusMessage = String.format("Online - %d jogador%s", serverStatus.getPlayers(), serverStatus.getPlayers() == 1 ? "" : "es");
-                    break;
-                case OFFLINE:
-                    statusMessage = "Offline";
-                    break;
-                default:
-                    statusMessage = "Erro";
-                    break;
-            };
-
+            String serverName = formatServerName(serverStatus.getServerInfo().getName());
+            String statusMessage = getServerStatusMessage(serverStatus);
             fields.put(serverName, statusMessage);
         }
 
-        fields.entrySet().stream().sorted(Map.Entry.<String, String>comparingByKey().reversed()).forEach(entry -> {
-            embedBuilder.addField(entry.getKey(), entry.getValue(), false);
-        });
+        return fields;
+    }
 
+    private String formatServerName(String serverName) {
+        return Character.toUpperCase(serverName.charAt(0)) + serverName.substring(1);
+    }
+
+    private void addFieldsToEmbed(EmbedBuilder embedBuilder, HashMap<String, String> fields) {
+        fields.entrySet().stream()
+                .sorted(Map.Entry.<String, String>comparingByKey().reversed())
+                .forEach(entry -> embedBuilder.addField(entry.getKey(), entry.getValue(), false));
+    }
+
+    private boolean shouldUpdateMessage(EmbedBuilder embedBuilder) {
         boolean shouldEditMessage = false;
 
         for(MessageEmbed.Field field : embedBuilder.getFields()) {
@@ -163,13 +166,12 @@ public class VerifyStatusTask implements Runnable {
             shouldEditMessage = true;
         }
 
-        if(!shouldEditMessage)
-            return;
+        return shouldEditMessage;
+    }
 
+    private void editDiscordMessage(EmbedBuilder embedBuilder) {
         message.editMessageEmbeds(embedBuilder.build()).queue(
-                msg -> {
-                    shouldLogError = true;
-                },
+                msg -> shouldLogError = true,
                 error -> {
                     if(shouldLogError) {
                         shouldLogError = false;
@@ -177,5 +179,16 @@ public class VerifyStatusTask implements Runnable {
                     }
                 }
         );
+    }
+
+    private String getServerStatusMessage(ServerStatus serverStatus) {
+        switch (serverStatus.getStatus()) {
+            case ONLINE:
+                return String.format("Online - %d jogador%s", serverStatus.getPlayers(), serverStatus.getPlayers() == 1 ? "" : "es");
+            case OFFLINE:
+                return "Offline";
+            default:
+                return "Erro";
+        }
     }
 }

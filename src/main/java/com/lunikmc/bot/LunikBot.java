@@ -2,6 +2,7 @@ package com.lunikmc.bot;
 
 import com.lunikmc.bot.botlisteners.ButtonInteractionListener;
 import com.lunikmc.bot.botlisteners.OnReadyListener;
+import com.lunikmc.bot.botlisteners.SlashCommandListener;
 import com.lunikmc.bot.managers.ConfigManager;
 import com.lunikmc.bot.tasks.CreateVerificationMessageTask;
 import com.lunikmc.bot.tasks.VerifyStatusTask;
@@ -49,7 +50,8 @@ public final class LunikBot extends Plugin {
         jdaBuilder.setActivity(Activity.playing("lunikmc.com"));
         jdaBuilder.addEventListeners(
                 new ButtonInteractionListener(this),
-                new OnReadyListener(this)
+                new OnReadyListener(this),
+                new SlashCommandListener()
         );
 
         bot = jdaBuilder.build();
