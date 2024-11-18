@@ -1,35 +1,34 @@
-package com.lunikmc.bot.tasks;
+package com.lunikmc.bot.tasks.verifystatus;
 
 import com.lunikmc.bot.LunikBot;
 import com.lunikmc.bot.exceptions.InvalidMessageId;
 import com.lunikmc.bot.managers.ConfigManager;
 import com.lunikmc.bot.models.ServerStatus;
-import com.lunikmc.bot.models.Status;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
-import net.md_5.bungee.api.scheduler.ScheduledTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
-public class VerifyStatusTask implements Runnable {
-    private static final Logger LOGGER = LoggerFactory.getLogger(VerifyStatusTask.class);
+public class DiscordMessageService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DiscordMessageService.class);
 
     private final LunikBot lunikBot;
     private final HashMap<String, String> lastMessages = new HashMap<>();
 
     private Message message;
-    private ScheduledTask scheduledTask;
     private boolean shouldLogError = true;
 
-    public VerifyStatusTask(LunikBot lunikBot) {
+    public DiscordMessageService(LunikBot lunikBot) {
         this.lunikBot = lunikBot;
 
         try {
@@ -39,21 +38,12 @@ public class VerifyStatusTask implements Runnable {
         } catch (ErrorResponseException e) {
             LOGGER.info("Não foi possível encontrar a mensagem de status com o ID fornecido, criando nova mensagem...");
             createStatusMessage(lunikBot);
-            return;
         }
-
-        startTask();
     }
 
-    public VerifyStatusTask(LunikBot lunikBot, Message message) {
+    public DiscordMessageService(LunikBot lunikBot, Message message) {
         this.lunikBot = lunikBot;
         this.message = message;
-
-        startTask();
-    }
-
-    private void startTask() {
-        scheduledTask = lunikBot.getProxy().getScheduler().schedule(lunikBot, this, 0, 5, TimeUnit.SECONDS);
     }
 
     private void createStatusMessage(LunikBot lunikBot) {
@@ -67,14 +57,24 @@ public class VerifyStatusTask implements Runnable {
 
         channel.sendMessageEmbeds(lunikBot.getDefaultEmbed().build()).queue(msg -> {
             configManager.setStatusMessageId(msg.getId());
-            VerifyStatusTask verifyStatusTask = new VerifyStatusTask(lunikBot, msg);
+            DiscordMessageService discordMessageUpdater = new DiscordMessageService(lunikBot, msg);
+            VerifyStatusTask verifyStatusTask = new VerifyStatusTask(lunikBot, discordMessageUpdater);
             lunikBot.setVerifyStatusTask(verifyStatusTask);
         });
     }
 
-    public void proxyOffline() {
-        scheduledTask.cancel();
+    public void updateDiscordMessage(List<ServerStatus> serversStatus) {
+        EmbedBuilder embedBuilder = new EmbedBuilder(lunikBot.getDefaultEmbed().build());
+        HashMap<String, String> fields = collectServerStatusFields(serversStatus);
 
+        addFieldsToEmbed(embedBuilder, fields);
+
+        if(shouldUpdateMessage(embedBuilder)) {
+            editDiscordMessage(embedBuilder);
+        }
+    }
+
+    public void proxyOffline() {
         MessageEmbed messageEmbed = new EmbedBuilder()
                 .setColor(0xFF0000)
                 .setTitle("Status - Lunik (Offline)")
@@ -90,48 +90,6 @@ public class VerifyStatusTask implements Runnable {
         }
     }
 
-    @Override
-    public void run() {
-        List<ServerStatus> serversStatus = Collections.synchronizedList(new ArrayList<>());
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-        lunikBot.getProxy().getServers().values().forEach(registeredServer -> {
-            CompletableFuture<Void> future = new CompletableFuture<>();
-
-            CompletableFuture.runAsync(() -> {
-                registeredServer.ping((serverPing, throwable) -> {
-                    if (throwable != null || serverPing == null) {
-                        serversStatus.add(new ServerStatus(registeredServer, Status.OFFLINE, 0));
-                    } else {
-                        serversStatus.add(new ServerStatus(registeredServer, Status.ONLINE, serverPing.getPlayers().getOnline()));
-                    }
-                    future.complete(null);
-                });
-            }).exceptionally(error -> {
-                serversStatus.add(new ServerStatus(registeredServer, Status.OFFLINE, 0));
-                future.complete(null);
-                return null;
-            });
-
-            futures.add(future);
-        });
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        updateDiscordMessage(serversStatus);
-    }
-
-    private void updateDiscordMessage(List<ServerStatus> serversStatus) {
-        EmbedBuilder embedBuilder = new EmbedBuilder(lunikBot.getDefaultEmbed().build());
-        HashMap<String, String> fields = collectServerStatusFields(serversStatus);
-
-        addFieldsToEmbed(embedBuilder, fields);
-
-        if(shouldUpdateMessage(embedBuilder)) {
-            editDiscordMessage(embedBuilder);
-        }
-    }
-
     private HashMap<String, String> collectServerStatusFields(List<ServerStatus> serversStatus) {
         HashMap<String, String> fields = new HashMap<>();
 
@@ -142,6 +100,17 @@ public class VerifyStatusTask implements Runnable {
         }
 
         return fields;
+    }
+
+    private String getServerStatusMessage(ServerStatus serverStatus) {
+        switch (serverStatus.getStatus()) {
+            case ONLINE:
+                return String.format("Online - %d jogador%s", serverStatus.getPlayers(), serverStatus.getPlayers() == 1 ? "" : "es");
+            case OFFLINE:
+                return "Offline";
+            default:
+                return "Erro";
+        }
     }
 
     private String formatServerName(String serverName) {
@@ -179,16 +148,5 @@ public class VerifyStatusTask implements Runnable {
                     }
                 }
         );
-    }
-
-    private String getServerStatusMessage(ServerStatus serverStatus) {
-        switch (serverStatus.getStatus()) {
-            case ONLINE:
-                return String.format("Online - %d jogador%s", serverStatus.getPlayers(), serverStatus.getPlayers() == 1 ? "" : "es");
-            case OFFLINE:
-                return "Offline";
-            default:
-                return "Erro";
-        }
     }
 }
