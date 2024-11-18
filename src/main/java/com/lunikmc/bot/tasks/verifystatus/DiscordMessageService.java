@@ -2,6 +2,7 @@ package com.lunikmc.bot.tasks.verifystatus;
 
 import com.lunikmc.bot.LunikBot;
 import com.lunikmc.bot.exceptions.InvalidMessageId;
+import com.lunikmc.bot.factories.VerifyStatusTaskFactory;
 import com.lunikmc.bot.managers.ConfigManager;
 import com.lunikmc.bot.models.ServerStatus;
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -57,9 +58,9 @@ public class DiscordMessageService {
 
         channel.sendMessageEmbeds(lunikBot.getDefaultEmbed().build()).queue(msg -> {
             configManager.setStatusMessageId(msg.getId());
-            DiscordMessageService discordMessageUpdater = new DiscordMessageService(lunikBot, msg);
-            VerifyStatusTask verifyStatusTask = new VerifyStatusTask(lunikBot, discordMessageUpdater);
-            lunikBot.setVerifyStatusTask(verifyStatusTask);
+            this.message = msg;
+//            VerifyStatusTask verifyStatusTask = new VerifyStatusTaskFactory(lunikBot, )
+//            lunikBot.setVerifyStatusTask(verifyStatusTask);
         });
     }
 
